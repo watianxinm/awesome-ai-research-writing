@@ -1,0 +1,45 @@
+name: Daily Sync with Backup
+
+on:
+  schedule:
+    - cron: '23 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Back up and sync upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream https://github.com/Leey21/awesome-ai-research-writing.git
+          git fetch upstream main
+
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Already up to date. Nothing to sync."
+            exit 0
+          fi
+
+          tag="backup-$(date -u +%Y%m%d-%H%M%S)"
+          git tag -a "$tag" -m "Backup before upstream sync" HEAD
+          git push origin "$tag"
+
+          git merge --no-edit upstream/main
+          git push origin HEAD:main
+          echo "Sync complete; previous version saved as $tag"
